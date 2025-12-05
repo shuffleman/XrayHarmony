@@ -1,10 +1,10 @@
 module github.com/shuffleman/XrayHarmony
 
-go 1.23.1
+go 1.25
 
-toolchain go1.24.7
+toolchain go1.25.5
 
-require github.com/xtls/xray-core v1.8.16
+require github.com/xtls/xray-core v1.250911.0
 
 require (
 	github.com/andybalholm/brotli v1.1.0 // indirect
