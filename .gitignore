@@ -1,7 +1,6 @@
 # Go
 *.so
 *.a
-*.h
 go/vendor/
 
 # Build artifacts
