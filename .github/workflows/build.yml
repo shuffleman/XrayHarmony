@@ -53,6 +53,7 @@ jobs:
       - name: Download Go dependencies
         run: |
           cd go
+          go mod tidy
           go mod download
 
       - name: Build Go shared library
@@ -187,6 +188,7 @@ jobs:
       - name: Download dependencies
         run: |
           cd go
+          go mod tidy
           go mod download
 
       - name: Run tests
