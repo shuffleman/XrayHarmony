@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include_directories(
     ${CMAKE_SOURCE_DIR}/../native/include
 )
+include_directories(${CMAKE_BINARY_DIR}/libs)
 
 # 库目录
 link_directories(
