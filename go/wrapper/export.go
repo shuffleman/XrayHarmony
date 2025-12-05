@@ -1,4 +1,4 @@
-package wrapper
+package main
 
 /*
 #include <stdlib.h>
