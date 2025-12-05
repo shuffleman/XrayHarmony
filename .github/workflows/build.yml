@@ -81,10 +81,10 @@ jobs:
       matrix:
         include:
           - arch: arm64
-            cc: aarch64-linux-gnu-g++
+            cc: aarch64-linux-gnu-gcc
             cxx: aarch64-linux-gnu-g++
           - arch: arm
-            cc: arm-linux-gnueabihf-g++
+            cc: arm-linux-gnueabihf-gcc
             cxx: arm-linux-gnueabihf-g++
 
     steps:
