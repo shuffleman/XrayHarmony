@@ -5,7 +5,6 @@ package main
 */
 import "C"
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 	"unsafe"
@@ -16,12 +15,6 @@ var (
 	instances   = make(map[int64]*XrayInstance)
 	instancesMu sync.RWMutex
 	nextID      int64 = 1
-)
-
-// VPN 管理器映射
-var (
-	vpnManagers   = make(map[int64]*VPNManager)
-	vpnManagersMu sync.RWMutex
 )
 
 // 错误信息缓存
@@ -242,156 +235,8 @@ func XrayTestConfig(id C.longlong, configJSON *C.char) C.int {
 // 版本信息
 //export XrayGetVersion
 func XrayGetVersion() *C.char {
-	version := "XrayHarmony v1.1.0 (with VPN support)"
+	version := "XrayHarmony v1.0.0"
 	return C.CString(version)
-}
-
-// ================ VPN 相关导出函数 ================
-
-//export VPNNewManager
-func VPNNewManager(xrayInstanceID C.longlong) C.longlong {
-	instancesMu.RLock()
-	xrayInstance, exists := instances[int64(xrayInstanceID)]
-	instancesMu.RUnlock()
-
-	if !exists {
-		setLastError(fmt.Errorf("xray instance not found"))
-		return -1
-	}
-
-	vpnManagersMu.Lock()
-	defer vpnManagersMu.Unlock()
-
-	id := nextID
-	nextID++
-
-	manager := NewVPNManager(xrayInstance)
-	vpnManagers[id] = manager
-
-	setLastError(nil)
-	return C.longlong(id)
-}
-
-//export VPNDeleteManager
-func VPNDeleteManager(id C.longlong) C.int {
-	vpnManagersMu.Lock()
-	defer vpnManagersMu.Unlock()
-
-	managerID := int64(id)
-	manager, exists := vpnManagers[managerID]
-	if !exists {
-		setLastError(fmt.Errorf("VPN manager not found"))
-		return -1
-	}
-
-	// 如果 VPN 正在运行，先停止
-	if manager.IsRunning() {
-		if err := manager.Stop(); err != nil {
-			setLastError(err)
-			return -1
-		}
-	}
-
-	delete(vpnManagers, managerID)
-	setLastError(nil)
-	return 0
-}
-
-//export VPNStart
-func VPNStart(id C.longlong, configJSON *C.char) C.int {
-	vpnManagersMu.RLock()
-	manager, exists := vpnManagers[int64(id)]
-	vpnManagersMu.RUnlock()
-
-	if !exists {
-		setLastError(fmt.Errorf("VPN manager not found"))
-		return -1
-	}
-
-	// 解析配置
-	configStr := C.GoString(configJSON)
-	var config VPNConfig
-	if err := json.Unmarshal([]byte(configStr), &config); err != nil {
-		setLastError(fmt.Errorf("failed to parse VPN config: %w", err))
-		return -1
-	}
-
-	// 启动 VPN
-	if err := manager.Start(&config); err != nil {
-		setLastError(err)
-		return -1
-	}
-
-	setLastError(nil)
-	return 0
-}
-
-//export VPNStop
-func VPNStop(id C.longlong) C.int {
-	vpnManagersMu.RLock()
-	manager, exists := vpnManagers[int64(id)]
-	vpnManagersMu.RUnlock()
-
-	if !exists {
-		setLastError(fmt.Errorf("VPN manager not found"))
-		return -1
-	}
-
-	if err := manager.Stop(); err != nil {
-		setLastError(err)
-		return -1
-	}
-
-	setLastError(nil)
-	return 0
-}
-
-//export VPNIsRunning
-func VPNIsRunning(id C.longlong) C.int {
-	vpnManagersMu.RLock()
-	manager, exists := vpnManagers[int64(id)]
-	vpnManagersMu.RUnlock()
-
-	if !exists {
-		setLastError(fmt.Errorf("VPN manager not found"))
-		return -1
-	}
-
-	if manager.IsRunning() {
-		setLastError(nil)
-		return 1
-	}
-
-	setLastError(nil)
-	return 0
-}
-
-//export VPNGetStats
-func VPNGetStats(id C.longlong) *C.char {
-	vpnManagersMu.RLock()
-	manager, exists := vpnManagers[int64(id)]
-	vpnManagersMu.RUnlock()
-
-	if !exists {
-		setLastError(fmt.Errorf("VPN manager not found"))
-		return nil
-	}
-
-	stats, err := manager.GetStats()
-	if err != nil {
-		setLastError(err)
-		return nil
-	}
-
-	// 将统计信息转换为 JSON
-	data, err := json.Marshal(stats)
-	if err != nil {
-		setLastError(fmt.Errorf("failed to marshal stats: %w", err))
-		return nil
-	}
-
-	setLastError(nil)
-	return C.CString(string(data))
 }
 
 func main() {
