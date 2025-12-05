@@ -1,0 +1,23 @@
+{
+  "name": "@shuffleman/xray-harmony",
+  "version": "1.0.0",
+  "description": "Xray-core wrapper for HarmonyOS",
+  "main": "src/index.ets",
+  "types": "src/index.d.ts",
+  "keywords": [
+    "xray",
+    "xray-core",
+    "harmonyos",
+    "arkts",
+    "proxy",
+    "vpn"
+  ],
+  "author": "shuffleman",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shuffleman/XrayHarmony"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
