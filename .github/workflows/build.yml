@@ -77,29 +77,44 @@ jobs:
     name: Build Native C++ Wrapper
     runs-on: ubuntu-latest
     needs: build-go-libs
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            cc: aarch64-linux-gnu-g++
+            cxx: aarch64-linux-gnu-g++
+          - arch: arm
+            cc: arm-linux-gnueabihf-g++
+            cxx: arm-linux-gnueabihf-g++
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install CMake and build tools
+      - name: Install CMake and cross-compilation tools
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake build-essential
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            sudo apt-get install -y g++-aarch64-linux-gnu
+          elif [ "${{ matrix.arch }}" = "arm" ]; then
+            sudo apt-get install -y g++-arm-linux-gnueabihf
+          fi
 
-      - name: Download all Go libraries
+      - name: Download Go library for ${{ matrix.arch }}
         uses: actions/download-artifact@v4
         with:
-          path: libs-artifacts
+          name: libxray-linux-${{ matrix.arch }}
+          path: libs
 
-      - name: Organize libraries
-        run: |
-          mkdir -p libs
-          find libs-artifacts -name "libxray_*.so" -exec cp {} libs/ \;
-          find libs-artifacts -name "libxray_*.h" -exec cp {} libs/ \;
-          ls -lh libs/
+      - name: List downloaded libraries
+        run: ls -lh libs/
 
-      - name: Build Native wrapper
+      - name: Build Native wrapper for ${{ matrix.arch }}
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+          CXX: ${{ matrix.cxx }}
+          CC: ${{ matrix.cc }}
         run: |
           mkdir -p build/cmake
           cd build/cmake
@@ -109,8 +124,8 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: native-build
-          path: build/cmake/
+          name: native-build-${{ matrix.arch }}
+          path: build/cmake/libxray_harmony.so
 
   package:
     name: Package All Artifacts
@@ -126,8 +141,17 @@ jobs:
       - name: Organize artifacts
         run: |
           mkdir -p release
-          find artifacts -name "libxray_*.so" -exec cp {} release/ \;
-          find artifacts -name "libxray_*.h" -exec cp {} release/ \;
+          # Copy Go libraries and headers
+          find artifacts -name "libxray_linux_*.so" -exec cp {} release/ \;
+          find artifacts -name "libxray_linux_*.h" -exec cp {} release/ \;
+          # Copy native wrappers
+          find artifacts -name "libxray_harmony.so" | while read file; do
+            dir=$(dirname "$file")
+            arch=$(basename "$dir" | sed 's/native-build-//')
+            if [ -n "$arch" ]; then
+              cp "$file" "release/libxray_harmony_$arch.so"
+            fi
+          done
           ls -lh release/
 
       - name: Upload final package
