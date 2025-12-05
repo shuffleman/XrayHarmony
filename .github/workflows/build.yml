@@ -17,9 +17,6 @@ jobs:
           - arch: arm64
             cc: aarch64-linux-gnu-gcc
             go_arch: arm64
-          - arch: amd64
-            cc: gcc
-            go_arch: amd64
           - arch: arm
             cc: arm-linux-gnueabihf-gcc
             go_arch: arm
