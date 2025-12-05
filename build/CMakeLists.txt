@@ -24,15 +24,22 @@ set(SOURCES
 add_library(xray_harmony SHARED ${SOURCES})
 
 # 链接 Go 共享库
-# 根据目标平台选择正确的库
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
-    set(XRAY_LIB "xray_linux_arm64")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "amd64")
-    set(XRAY_LIB "xray_linux_amd64")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
-    set(XRAY_LIB "xray_linux_arm")
+# 允许通过环境变量指定目标架构，否则自动检测
+if(DEFINED ENV{TARGET_ARCH})
+    set(TARGET_ARCH $ENV{TARGET_ARCH})
+    message(STATUS "Using target architecture from environment: ${TARGET_ARCH}")
+    set(XRAY_LIB "xray_linux_${TARGET_ARCH}")
 else()
-    message(FATAL_ERROR "Unsupported architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+    # 根据系统平台选择正确的库
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+        set(XRAY_LIB "xray_linux_arm64")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64" OR CMAKE_SYSTEM_PROCESSOR MATCHES "amd64")
+        set(XRAY_LIB "xray_linux_amd64")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
+        set(XRAY_LIB "xray_linux_arm")
+    else()
+        message(FATAL_ERROR "Unsupported architecture: ${CMAKE_SYSTEM_PROCESSOR}")
+    endif()
 endif()
 
 target_link_libraries(xray_harmony ${XRAY_LIB})
