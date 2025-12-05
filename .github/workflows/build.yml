@@ -1,0 +1,174 @@
+name: Build XrayHarmony
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-go-libs:
+    name: Build Go Shared Libraries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: arm64
+            cc: aarch64-linux-gnu-gcc
+            go_arch: arm64
+          - arch: amd64
+            cc: gcc
+            go_arch: amd64
+          - arch: arm
+            cc: arm-linux-gnueabihf-gcc
+            go_arch: arm
+            go_arm: "7"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Install cross-compilation toolchain
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.arch }}" = "arm64" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu
+          elif [ "${{ matrix.arch }}" = "arm" ]; then
+            sudo apt-get install -y gcc-arm-linux-gnueabihf
+          fi
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download Go dependencies
+        run: |
+          cd go
+          go mod download
+
+      - name: Build Go shared library
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.go_arch }}
+          CGO_ENABLED: 1
+          CC: ${{ matrix.cc }}
+          GOARM: ${{ matrix.go_arm }}
+        run: |
+          mkdir -p libs
+          cd go
+          go build -buildmode=c-shared -o ../libs/libxray_linux_${{ matrix.arch }}.so ./wrapper
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libxray-linux-${{ matrix.arch }}
+          path: libs/libxray_linux_${{ matrix.arch }}.*
+
+  build-native:
+    name: Build Native C++ Wrapper
+    runs-on: ubuntu-latest
+    needs: build-go-libs
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install CMake and build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+
+      - name: Download all Go libraries
+        uses: actions/download-artifact@v4
+        with:
+          path: libs-artifacts
+
+      - name: Organize libraries
+        run: |
+          mkdir -p libs
+          find libs-artifacts -name "libxray_*.so" -exec cp {} libs/ \;
+          find libs-artifacts -name "libxray_*.h" -exec cp {} libs/ \;
+          ls -lh libs/
+
+      - name: Build Native wrapper
+        run: |
+          mkdir -p build/cmake
+          cd build/cmake
+          cmake ..
+          make
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-build
+          path: build/cmake/
+
+  package:
+    name: Package All Artifacts
+    runs-on: ubuntu-latest
+    needs: [build-go-libs, build-native]
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Organize artifacts
+        run: |
+          mkdir -p release
+          find artifacts -name "libxray_*.so" -exec cp {} release/ \;
+          find artifacts -name "libxray_*.h" -exec cp {} release/ \;
+          ls -lh release/
+
+      - name: Upload final package
+        uses: actions/upload-artifact@v4
+        with:
+          name: xrayharmony-all-platforms
+          path: release/
+          retention-days: 30
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-test-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-test-
+
+      - name: Download dependencies
+        run: |
+          cd go
+          go mod download
+
+      - name: Run tests
+        run: |
+          cd go
+          go test -v ./...
