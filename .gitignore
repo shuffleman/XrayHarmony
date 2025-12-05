@@ -3,7 +3,6 @@
 *.a
 *.h
 go/vendor/
-go.sum
 
 # Build artifacts
 libs/
