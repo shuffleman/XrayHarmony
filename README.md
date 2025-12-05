@@ -21,6 +21,7 @@ XrayHarmony 是一个为鸿蒙系统（HarmonyOS）设计的 [Xray-core](https:/
 - 🛠️ **灵活配置**：支持 JSON 配置和文件配置
 - 📊 **实时统计**：提供运行状态和流量统计
 - 🎨 **多架构支持**：支持 ARM64、ARM、AMD64 等多种架构
+- 🌐 **VPN 模式**：支持 TUN 网卡，实现完整的系统级 VPN 功能
 
 ## 🏗️ 架构
 
@@ -177,6 +178,51 @@ client.destroy();
 
 ## 📚 使用示例
 
+### VPN 模式 (推荐)
+
+XrayHarmony 现已支持完整的 VPN 功能，可实现系统级全局代理：
+
+```typescript
+import VpnExtensionAbility from '@ohos.app.ability.VpnExtensionAbility';
+import vpnExt from '@ohos.net.vpnExtension';
+import { XrayClient, createXrayClient } from './index';
+import { XrayVPNClient, createXrayVPNClient, VPNConfig } from './vpn';
+
+export default class XrayVpnExtension extends VpnExtensionAbility {
+  private xrayClient: XrayClient;
+  private vpnClient: XrayVPNClient;
+  private vpnConnection: vpnExt.VpnConnection;
+
+  async startVPN(xrayConfig: any): Promise<void> {
+    // 1. 创建并启动 Xray
+    this.xrayClient = createXrayClient();
+    await this.xrayClient.loadConfig(xrayConfig);
+    await this.xrayClient.start();
+
+    // 2. 创建 TUN 设备
+    this.vpnConnection = vpnExt.createVpnConnection(this.context);
+    const tunConfig = {
+      addresses: [{ address: { address: '10.0.0.2', family: 1 }, prefixLength: 24 }],
+      routes: [{ interface: 'vpn-tun', destination: { address: '0.0.0.0', family: 1 }, prefixLength: 0 }],
+      mtu: 1400,
+      dnsAddresses: [{ address: '8.8.8.8', family: 1 }]
+    };
+    const tunFd = await this.vpnConnection.create(tunConfig);
+
+    // 3. 启动 VPN
+    this.vpnClient = createXrayVPNClient(this.xrayClient.instanceId);
+    await this.vpnClient.start({
+      tunFd: tunFd,
+      tunMTU: 1400,
+      socksAddr: '127.0.0.1:10808',
+      dnsServers: ['8.8.8.8', '8.8.4.4']
+    });
+  }
+}
+```
+
+详细的 VPN 使用指南请参考 [VPN 文档](docs/VPN.md)。
+
 ### 基础使用
 
 ```typescript
@@ -271,6 +317,8 @@ export class XrayService {
 ## 📖 文档
 
 - [API 文档](docs/API.md) - 完整的 API 参考
+- [VPN 使用指南](docs/VPN.md) - TUN + Xray VPN 功能详细说明
+- [构建文档](docs/BUILD.md) - 构建和集成指南
 - [示例代码](examples/) - 各种使用场景示例
 
 ## 🔧 开发
@@ -321,6 +369,7 @@ make test
 ## 🙏 致谢
 
 - [Xray-core](https://github.com/xtls/xray-core) - 强大的代理工具核心
+- [tun2socks](https://github.com/xjasonlyu/tun2socks) - 优秀的 TUN 网络栈实现
 - HarmonyOS 开发团队 - 提供优秀的开发平台
 
 ## 📮 联系方式
