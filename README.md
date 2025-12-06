@@ -202,37 +202,43 @@ console.log('端口:', serverConfig.port);
 console.log('协议:', serverConfig.protocol);
 ```
 
-### 使用配置构建器
+### 使用 JSON 配置
 
 ```typescript
-import { ConfigBuilder } from '@shuffleman/xray-harmony';
+// 直接使用 Xray 标准 JSON 配置
+const configJSON = JSON.stringify({
+  log: { loglevel: 'warning' },
+  inbounds: [{
+    protocol: 'socks',
+    listen: '127.0.0.1',
+    port: 10808,
+    settings: { auth: 'noauth', udp: true }
+  }],
+  outbounds: [{
+    protocol: 'vmess',
+    settings: {
+      vnext: [{
+        address: 'server.example.com',
+        port: 443,
+        users: [{ id: 'your-uuid-here', alterId: 0, security: 'auto' }]
+      }]
+    }
+  }, {
+    tag: 'direct',
+    protocol: 'freedom'
+  }],
+  routing: {
+    rules: [{
+      type: 'field',
+      outboundTag: 'direct',
+      domain: ['geosite:cn'],
+      ip: ['geoip:cn', 'geoip:private']
+    }]
+  },
+  stats: {}
+});
 
-const builder = new ConfigBuilder();
-
-// 设置日志级别
-builder.setLogLevel('warning');
-
-// 添加 SOCKS5 入站
-builder.addSocksInbound(10808, '127.0.0.1', false, true);
-
-// 添加 VMess 出站
-builder.addVMessOutbound(
-  'server.example.com',
-  443,
-  'your-uuid-here',
-  0,
-  'auto'
-);
-
-// 添加路由规则 - 中国 IP 直连
-builder.addRoutingRule('field', 'direct', ['geosite:cn'], ['geoip:cn']);
-
-// 启用统计
-builder.enableStats();
-
-// 构建并使用配置
-const config = builder.build();
-await client.loadConfig(config);
+await client.loadConfig(configJSON);
 await client.start();
 ```
 
@@ -250,8 +256,7 @@ await assetMgr.download('geoip', '', (progress) => {
 
 await assetMgr.download('geosite', '');
 
-// 在配置中使用
-builder.addRoutingRule('field', 'direct', ['geosite:cn'], ['geoip:cn', 'geoip:private']);
+// geoip/geosite 文件会被自动使用在路由规则中
 ```
 
 ### VPN 模式
@@ -454,12 +459,12 @@ export class XrayService {
 - 自动检查更新
 - 下载进度跟踪
 
-#### ⚙️ 配置构建器
-流畅的配置 API:
-- 链式调用
-- 类型安全
-- 支持所有协议
-- 路由规则简化
+#### ⚙️ 标准配置
+使用 Xray 标准 JSON 配置:
+- 完全兼容 Xray 官方配置
+- 支持所有协议和功能
+- 灵活的配置方式
+- 易于从其他项目迁移
 
 ## 🔧 开发
 
@@ -543,13 +548,11 @@ make test
 - ✅ 文件验证
 - ✅ 下载进度回调
 
-#### 4. **配置构建器**
-- ✅ 流畅的配置 API
-- ✅ 支持所有入站协议 (SOCKS5, HTTP)
-- ✅ 支持所有出站协议 (VMess, VLESS, Trojan, SS, Freedom, Blackhole)
-- ✅ 路由规则配置
-- ✅ DNS 配置
-- ✅ 统计和策略支持
+#### 4. **标准配置**
+- ✅ 使用 Xray 标准 JSON 配置
+- ✅ 完全兼容 Xray 官方配置
+- ✅ 支持所有协议和功能
+- ✅ 灵活的配置方式
 
 #### 5. **增强的统计功能**
 - ✅ 实时流量统计
