@@ -390,12 +390,19 @@ make test
 - **零依赖冲突**: 所有依赖版本兼容性已验证
 - **原生性能**: 基于 CGO 的高效 C/C++ 桥接
 - **模块化设计**: Go → C++ → ArkTS 清晰的分层架构
-- **内置 TUN**: 使用 Xray-core 内置 TUN 实现，无需外部依赖
+- **完整代理支持**: 支持所有 Xray 协议（SOCKS5、VMess、VLESS、Trojan 等）
+
+### VPN 功能说明
+- **核心封装**: XrayHarmony 封装 Xray-core 提供 SOCKS5 代理功能
+- **VPN 实现**: 需配合外部 tun2socks 实现完整 VPN 功能
+- **分离式架构**: Xray-core 不支持 TUN 入站，VPN 需要独立的 TUN 处理组件
+- **参考示例**: 查看 `examples/VPNControl_Demo` 了解 VPN 集成方案
 
 ## 🙏 致谢
 
 - [Xray-core](https://github.com/xtls/xray-core) - 强大的代理工具核心
-- [gvisor](https://github.com/google/gvisor) - 高性能网络栈
+- [tun2socks](https://github.com/xjasonlyu/tun2socks) - TUN 流量处理
+- [gvisor](https://github.com/google/gvisor) - 高性能用户态网络栈
 - HarmonyOS 开发团队 - 提供优秀的开发平台
 - 所有贡献者和使用者
 
