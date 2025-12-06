@@ -31,14 +31,20 @@
 - ✅ Go 工具链从 1.24.7 升级到 1.25.5
 - ✅ Xray-core 从 v1.8.16 升级到 v1.250911.0
 - ✅ gvisor 依赖冲突已解决
-- ✅ 移除了嵌入式 tun2socks，使用 Xray-core 内置实现
+- ✅ 移除了嵌入式 tun2socks 的尝试，明确分离式架构
 
 **关键成果**:
 1. **依赖冲突解决**: 成功解决了 gvisor 版本冲突问题
-2. **架构简化**: 移除了嵌入式 tun2socks，代码结构更清晰
-3. **功能完善**: VPN 功能完全正常工作
+2. **代码重构**: 移除了嵌入式 tun2socks 的尝试，明确架构方向
+3. **核心功能稳定**: Xray-core 代理功能完全正常工作
 4. **性能提升**: 新版本带来显著的性能改进
 5. **安全加固**: 包含最新的安全补丁
+
+**架构说明**:
+- XrayHarmony 专注于封装 Xray-core 核心功能
+- Xray-core 本身不支持 TUN 入站
+- VPN 功能需要配合外部 tun2socks 组件实现
+- 采用分离式架构确保模块清晰和稳定性
 
 ## 技术细节
 
@@ -66,12 +72,11 @@ require github.com/xtls/xray-core v1.251202.0
 ## 兼容性验证
 
 所有核心功能已验证工作正常：
-- ✅ 基础代理功能
-- ✅ TUN 网卡支持
-- ✅ VPN 模式
-- ✅ 多协议支持 (VMess, VLESS, Trojan, Shadowsocks 等)
-- ✅ 流量路由
+- ✅ 基础代理功能（SOCKS5、HTTP 等）
+- ✅ 多协议支持（VMess、VLESS、Trojan、Shadowsocks 等）
+- ✅ 流量路由和分流
 - ✅ DNS 处理
+- ⚠️ VPN 功能需配合外部 tun2socks 使用（参见 VPN_ARCHITECTURE.md）
 
 ## 未来维护
 

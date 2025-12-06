@@ -19,14 +19,6 @@ extern "C" {
     char* XrayGetStats(long long id);
     int XrayTestConfig(long long id, const char* configJSON);
     char* XrayGetVersion();
-
-    // VPN 相关函数
-    long long VPNNewManager(long long xrayInstanceID);
-    int VPNDeleteManager(long long id);
-    int VPNStart(long long id, const char* configJSON);
-    int VPNStop(long long id);
-    int VPNIsRunning(long long id);
-    char* VPNGetStats(long long id);
 }
 
 namespace xray {
@@ -53,57 +45,13 @@ public:
     // 错误处理
     std::string getLastError() const;
 
-    // 获取实例 ID（用于创建 VPN 管理器）
+    // 获取实例 ID
     long long getInstanceId() const;
 
 private:
     void updateLastError();
 
     long long instanceId_;
-    std::string lastError_;
-};
-
-// VPN 配置结构
-struct VPNConfig {
-    int tunFd;
-    int tunMTU;
-    std::string socksAddr;
-    std::vector<std::string> dnsServers;
-    bool fakeDNS;
-    bool udp;
-    bool tcpConcurrent;
-};
-
-// VPN 统计信息结构
-struct VPNStats {
-    bool running;
-    std::string socksAddr;
-    int mtu;
-};
-
-class VPNBridge {
-public:
-    VPNBridge(XrayBridge* xrayBridge);
-    ~VPNBridge();
-
-    // VPN 控制
-    bool start(const VPNConfig& config);
-    bool start(const std::string& configJSON);
-    bool stop();
-    bool isRunning();
-
-    // 统计信息
-    VPNStats getStats();
-
-    // 错误处理
-    std::string getLastError() const;
-
-private:
-    void updateLastError();
-    std::string configToJSON(const VPNConfig& config);
-
-    long long managerId_;
-    XrayBridge* xrayBridge_;
     std::string lastError_;
 };
 

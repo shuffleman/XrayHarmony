@@ -186,50 +186,49 @@ client.destroy();
 
 ## 📚 使用示例
 
-### VPN 模式 (推荐)
+### VPN 模式
 
-XrayHarmony 现已支持完整的 VPN 功能，可实现系统级全局代理：
+XrayHarmony 配合 tun2socks 可以实现系统级 VPN 功能。
 
-```typescript
-import VpnExtensionAbility from '@ohos.app.ability.VpnExtensionAbility';
-import vpnExt from '@ohos.net.vpnExtension';
-import { XrayClient, createXrayClient } from './index';
-import { XrayVPNClient, createXrayVPNClient, VPNConfig } from './vpn';
-
-export default class XrayVpnExtension extends VpnExtensionAbility {
-  private xrayClient: XrayClient;
-  private vpnClient: XrayVPNClient;
-  private vpnConnection: vpnExt.VpnConnection;
-
-  async startVPN(xrayConfig: any): Promise<void> {
-    // 1. 创建并启动 Xray
-    this.xrayClient = createXrayClient();
-    await this.xrayClient.loadConfig(xrayConfig);
-    await this.xrayClient.start();
-
-    // 2. 创建 TUN 设备
-    this.vpnConnection = vpnExt.createVpnConnection(this.context);
-    const tunConfig = {
-      addresses: [{ address: { address: '10.0.0.2', family: 1 }, prefixLength: 24 }],
-      routes: [{ interface: 'vpn-tun', destination: { address: '0.0.0.0', family: 1 }, prefixLength: 0 }],
-      mtu: 1400,
-      dnsAddresses: [{ address: '8.8.8.8', family: 1 }]
-    };
-    const tunFd = await this.vpnConnection.create(tunConfig);
-
-    // 3. 启动 VPN
-    this.vpnClient = createXrayVPNClient(this.xrayClient.instanceId);
-    await this.vpnClient.start({
-      tunFd: tunFd,
-      tunMTU: 1400,
-      socksAddr: '127.0.0.1:10808',
-      dnsServers: ['8.8.8.8', '8.8.4.4']
-    });
-  }
-}
+**架构说明**：
+```
+HarmonyOS VPN API → TUN 设备
+         ↓
+    tun2socks (独立组件) → SOCKS5 连接
+         ↓
+    XrayHarmony (Xray SOCKS5) → 代理服务器
 ```
 
-详细的 VPN 使用指南请参考 [VPN 文档](docs/VPN.md)。
+**基本步骤**：
+
+1. **启动 Xray SOCKS5 代理**
+```typescript
+import { createXrayClient } from '@shuffleman/xray-harmony';
+
+const client = createXrayClient();
+await client.loadConfig({
+  inbound: {
+    protocol: 'socks',
+    port: 10808,
+    listen: '127.0.0.1',
+    settings: { auth: 'noauth', udp: true }
+  },
+  outbound: {
+    protocol: 'vmess',  // 或其他协议
+    settings: { /* 你的服务器配置 */ }
+  }
+});
+await client.start();
+```
+
+2. **使用 HarmonyOS VPN API 创建 TUN 设备**
+
+3. **启动 tun2socks 连接 TUN 和 SOCKS5**
+
+详细的 VPN 实现指南请参考：
+- [VPN 架构文档](docs/VPN_ARCHITECTURE.md) - 架构设计和实现方案
+- [VPN 使用指南](docs/VPN.md) - 配置和使用说明
+- [VPNControl_Demo](examples/VPNControl_Demo/) - 完整示例项目
 
 ### 基础使用
 
@@ -390,12 +389,19 @@ make test
 - **零依赖冲突**: 所有依赖版本兼容性已验证
 - **原生性能**: 基于 CGO 的高效 C/C++ 桥接
 - **模块化设计**: Go → C++ → ArkTS 清晰的分层架构
-- **内置 TUN**: 使用 Xray-core 内置 TUN 实现，无需外部依赖
+- **完整代理支持**: 支持所有 Xray 协议（SOCKS5、VMess、VLESS、Trojan 等）
+
+### VPN 功能说明
+- **核心封装**: XrayHarmony 封装 Xray-core 提供 SOCKS5 代理功能
+- **VPN 实现**: 需配合外部 tun2socks 实现完整 VPN 功能
+- **分离式架构**: Xray-core 不支持 TUN 入站，VPN 需要独立的 TUN 处理组件
+- **参考示例**: 查看 `examples/VPNControl_Demo` 了解 VPN 集成方案
 
 ## 🙏 致谢
 
 - [Xray-core](https://github.com/xtls/xray-core) - 强大的代理工具核心
-- [gvisor](https://github.com/google/gvisor) - 高性能网络栈
+- [tun2socks](https://github.com/xjasonlyu/tun2socks) - TUN 流量处理
+- [gvisor](https://github.com/google/gvisor) - 高性能用户态网络栈
 - HarmonyOS 开发团队 - 提供优秀的开发平台
 - 所有贡献者和使用者
 
