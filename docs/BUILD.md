@@ -6,7 +6,9 @@
 
 ### 必需软件
 
-- **Go**: 1.21 或更高版本
+- **Go**: **1.25 或更高版本** (推荐 1.25.5+)
+  - ⚠️ **重要**: Xray-core v1.251202.0 需要 Go 1.25+
+  - 低于此版本将无法编译
 - **CMake**: 3.16 或更高版本
 - **Make**: GNU Make 或兼容版本
 - **GCC/Clang**: 支持 C++17 的编译器
@@ -150,11 +152,29 @@ aarch64-linux-gnu-gcc: command not found
 **解决方案：**
 安装相应的交叉编译工具链（参见"系统要求"部分）。
 
-### 2. Go 模块下载失败
+### 2. Go 版本过低
 
 **错误信息：**
 ```
-go: github.com/xtls/xray-core@v1.8.16: Get "https://proxy.golang.org/...": dial tcp: i/o timeout
+go: github.com/xtls/xray-core@v1.251202.0 requires go >= 1.25
+```
+
+**解决方案：**
+升级 Go 到 1.25 或更高版本：
+```bash
+# 方法1: 下载并安装 Go 1.25
+# 访问 https://go.dev/dl/ 下载最新版本
+
+# 方法2: 使用 Go 工具链管理（推荐）
+cd go
+go get golang.org/toolchain@go1.25.5
+```
+
+### 3. Go 模块下载失败
+
+**错误信息：**
+```
+go: github.com/xtls/xray-core@v1.251202.0: Get "https://proxy.golang.org/...": dial tcp: i/o timeout
 ```
 
 **解决方案：**
@@ -165,7 +185,7 @@ export GOPROXY=https://goproxy.cn,direct
 export GOPROXY=https://goproxy.io,direct
 ```
 
-### 3. CGO 编译错误
+### 4. CGO 编译错误
 
 **错误信息：**
 ```
@@ -176,7 +196,7 @@ gcc: error: unrecognized command line option '-marm64'
 **解决方案：**
 确保使用正确的交叉编译器，检查 `CC` 环境变量是否设置正确。
 
-### 4. 权限错误
+### 5. 权限错误
 
 **错误信息：**
 ```
@@ -323,7 +343,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.21'
+          go-version: '1.25'
 
       - name: Install cross-compilers
         run: |

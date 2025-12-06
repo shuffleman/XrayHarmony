@@ -12,6 +12,14 @@
 
 XrayHarmony 是一个为鸿蒙系统（HarmonyOS）设计的 [Xray-core](https://github.com/xtls/xray-core) 封装库。它提供了从底层 Go 实现到高层 ArkTS 接口的完整封装，使得鸿蒙应用开发者可以轻松集成 Xray 的强大代理功能。
 
+### 🎉 项目状态
+
+- **当前版本**: 基于 Xray-core v1.251202.0
+- **Go 版本**: 1.25 (toolchain go1.25.5)
+- **核心状态**: ✅ Xray-core 封装已完成并稳定运行
+- **VPN 功能**: ✅ 完整支持 TUN 网卡和系统级 VPN
+- **依赖状态**: ✅ 所有依赖冲突已解决
+
 ## ✨ 特性
 
 - 🎯 **完整封装**：从 Go 到 ArkTS 的多层封装架构
@@ -74,10 +82,10 @@ XrayHarmony/
 
 ### 前置要求
 
-- Go 1.21 或更高版本
+- **Go 1.25 或更高版本** (推荐 1.25.5)
 - HarmonyOS SDK
 - CMake 3.16 或更高版本
-- GCC/Clang 编译器
+- GCC/Clang 编译器（支持 C++17）
 - 交叉编译工具链（用于目标架构）
 
 ### 编译
@@ -318,8 +326,12 @@ export class XrayService {
 
 - [API 文档](docs/API.md) - 完整的 API 参考
 - [VPN 使用指南](docs/VPN.md) - TUN + Xray VPN 功能详细说明
+- [VPN 架构文档](docs/VPN_ARCHITECTURE.md) - VPN 技术架构说明
 - [构建文档](docs/BUILD.md) - 构建和集成指南
+- [集成指南](docs/INTEGRATION.md) - HarmonyOS 项目集成说明
+- [升级记录](UPGRADE_PLAN.md) - Xray-core 升级历史和当前版本信息
 - [示例代码](examples/) - 各种使用场景示例
+- [VPN 示例项目](examples/VPNControl_Demo/) - 完整的鸿蒙 VPN 示例应用
 
 ## 🔧 开发
 
@@ -366,11 +378,26 @@ make test
 
 本项目仅供学习和研究使用。使用本项目时，请遵守当地法律法规。开发者不对使用本项目造成的任何后果负责。
 
+## 🚀 技术栈
+
+### 核心技术
+- **Xray-core**: v1.251202.0 - 最新稳定版本
+- **Go**: 1.25 with toolchain go1.25.5
+- **gvisor**: v0.0.0-20250428193742-2d800c3129d5 - 网络栈支持
+- **HarmonyOS**: 支持 API 9+
+
+### 架构特点
+- **零依赖冲突**: 所有依赖版本兼容性已验证
+- **原生性能**: 基于 CGO 的高效 C/C++ 桥接
+- **模块化设计**: Go → C++ → ArkTS 清晰的分层架构
+- **内置 TUN**: 使用 Xray-core 内置 TUN 实现，无需外部依赖
+
 ## 🙏 致谢
 
 - [Xray-core](https://github.com/xtls/xray-core) - 强大的代理工具核心
-- [tun2socks](https://github.com/xjasonlyu/tun2socks) - 优秀的 TUN 网络栈实现
+- [gvisor](https://github.com/google/gvisor) - 高性能网络栈
 - HarmonyOS 开发团队 - 提供优秀的开发平台
+- 所有贡献者和使用者
 
 ## 📮 联系方式
 

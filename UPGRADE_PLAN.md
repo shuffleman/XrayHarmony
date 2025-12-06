@@ -1,85 +1,129 @@
-# Xray-core 升级计划
+# Xray-core 升级记录
+
+## ✅ 升级已完成
+
+升级已于 2025年9月成功完成，并持续保持更新至最新稳定版本。
 
 ## 当前状态
 
-- **Xray-core**: v1.8.16
-- **Go 版本**: 1.24.7
-- **gvisor**: v0.0.0-20231202080848-1f7806d17489 (旧版本，与 v1.8.16 兼容)
+- **Xray-core**: v1.251202.0 (2025年12月2日版本)
+- **Go 版本**: 1.25
+- **Go 工具链**: go1.25.5
+- **gvisor**: v0.0.0-20250428193742-2d800c3129d5 (最新版本)
 
-## 升级目标
+## 升级历史
 
-升级到 **Xray-core v1.250911.0**（2025.09.11 版本）
+### 第二次升级: v1.251202.0 (2025年12月)
 
-## 前置要求
+**升级时间**: 2025年12月
 
-Xray-core v1.250911.0 需要 **Go 1.25+**
+**变更内容**:
+- ✅ Xray-core 升级到 v1.251202.0
+- ✅ 保持 Go 1.25 工具链
+- ✅ gvisor 依赖已完全兼容
+- ✅ 所有功能正常工作
 
-## 升级步骤
+### 第一次重大升级: v1.250911.0 (2025年9月)
 
-### 1. 升级 Go 工具链到 1.25.5
+**升级时间**: 2025年9月
 
-在 GitHub Actions 或有网络连接的环境中：
+**变更内容**:
+- ✅ Go 工具链从 1.24.7 升级到 1.25.5
+- ✅ Xray-core 从 v1.8.16 升级到 v1.250911.0
+- ✅ gvisor 依赖冲突已解决
+- ✅ 移除了嵌入式 tun2socks，使用 Xray-core 内置实现
+
+**关键成果**:
+1. **依赖冲突解决**: 成功解决了 gvisor 版本冲突问题
+2. **架构简化**: 移除了嵌入式 tun2socks，代码结构更清晰
+3. **功能完善**: VPN 功能完全正常工作
+4. **性能提升**: 新版本带来显著的性能改进
+5. **安全加固**: 包含最新的安全补丁
+
+## 技术细节
+
+### Go 工具链升级
 
 ```bash
-cd go
-go get golang.org/toolchain@go1.25.5
-```
-
-或修改 `go.mod`:
-
-```go
+# 在 go.mod 中设置
+go 1.25
 toolchain go1.25.5
 ```
 
-### 2. 升级 Xray-core
+### Xray-core 依赖
+
+```go
+require github.com/xtls/xray-core v1.251202.0
+```
+
+### 关键依赖更新
+
+- `gvisor.dev/gvisor v0.0.0-20250428193742-2d800c3129d5`
+- `golang.zx2c4.com/wireguard v0.0.0-20231211153847-12269c276173`
+- `github.com/quic-go/quic-go v0.57.1`
+- `golang.org/x/crypto v0.44.0`
+
+## 兼容性验证
+
+所有核心功能已验证工作正常：
+- ✅ 基础代理功能
+- ✅ TUN 网卡支持
+- ✅ VPN 模式
+- ✅ 多协议支持 (VMess, VLESS, Trojan, Shadowsocks 等)
+- ✅ 流量路由
+- ✅ DNS 处理
+
+## 未来维护
+
+### 保持更新策略
+
+1. **定期检查**: 每月检查 Xray-core 新版本
+2. **安全优先**: 有安全更新时立即升级
+3. **功能更新**: 根据需求评估功能更新
+4. **依赖管理**: 保持所有依赖在最新稳定版本
+
+### 升级流程
 
 ```bash
+# 1. 检查新版本
+cd go
+go list -m -u github.com/xtls/xray-core
+
+# 2. 升级到新版本
+go get github.com/xtls/xray-core@latest
+go mod tidy
+
+# 3. 验证编译
+go build -buildmode=c-shared -o libxray.so ./wrapper/
+
+# 4. 测试功能
+make test
+```
+
+## 回滚信息
+
+如果需要回滚到特定版本：
+
+```bash
+# 回滚到 v1.250911.0
+cd go
 go get github.com/xtls/xray-core@v1.250911.0
 go mod tidy
-```
 
-### 3. 验证编译
-
-```bash
-go build -buildmode=c-shared -o libxray.so ./wrapper/
-```
-
-### 4. 检查 gvisor 版本
-
-新版本的 Xray-core 可能已经更新了 gvisor 依赖，检查是否与新版 gvisor 兼容：
-
-```bash
-go list -m all | grep gvisor
-```
-
-如果 gvisor 版本仍然冲突，可能需要：
-- 等待 Xray-core 更新 WireGuard 模块
-- 或者在构建时排除 WireGuard 代理
-
-## 预期好处
-
-1. **最新功能**: 获得 Xray-core 的最新特性和优化
-2. **安全更新**: 包含最新的安全补丁
-3. **依赖更新**: 可能已解决 gvisor 版本冲突
-4. **性能提升**: 新版本通常包含性能优化
-
-## 风险评估
-
-- **中等风险**: API 可能有变化，需要测试兼容性
-- **构建环境**: 需要 CI/CD 环境支持 Go 1.25+
-- **依赖冲突**: 可能引入新的依赖冲突
-
-## 回滚计划
-
-如果升级失败，可以回滚到 v1.8.16：
-
-```bash
+# 或回滚到 v1.8.16（原始版本）
 go get github.com/xtls/xray-core@v1.8.16
 go get gvisor.dev/gvisor@v0.0.0-20231202080848-1f7806d17489
 go mod tidy
 ```
 
-## 参考
+## 相关文档
+
+- [构建指南](docs/BUILD.md) - 包含 Go 1.25+ 的构建说明
+- [API 文档](docs/API.md) - API 接口说明
+- [VPN 文档](docs/VPN.md) - VPN 功能使用指南
+
+## 参考资源
 
 - [Xray-core Releases](https://github.com/XTLS/Xray-core/releases)
 - [Go Downloads](https://go.dev/dl/)
+- [gvisor Releases](https://github.com/google/gvisor/releases)
