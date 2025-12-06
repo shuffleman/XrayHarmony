@@ -23,50 +23,53 @@ func Example_ParseShareURL() {
 	fmt.Printf("备注: %s\n", config.Remark)
 }
 
-func Example_ConfigBuilder() {
-	// 使用配置构建器创建完整配置
-	builder := NewConfigBuilder()
+func Example_DirectJSONConfig() {
+	// 直接使用 JSON 配置
+	configJSON := `{
+		"log": {
+			"loglevel": "warning"
+		},
+		"inbounds": [{
+			"tag": "socks-in",
+			"protocol": "socks",
+			"listen": "127.0.0.1",
+			"port": 10808,
+			"settings": {
+				"auth": "noauth",
+				"udp": true
+			}
+		}],
+		"outbounds": [{
+			"tag": "proxy",
+			"protocol": "vmess",
+			"settings": {
+				"vnext": [{
+					"address": "example.com",
+					"port": 443,
+					"users": [{
+						"id": "uuid-here",
+						"alterId": 0,
+						"security": "auto"
+					}]
+				}]
+			}
+		}, {
+			"tag": "direct",
+			"protocol": "freedom"
+		}],
+		"routing": {
+			"domainStrategy": "AsIs",
+			"rules": [{
+				"type": "field",
+				"outboundTag": "direct",
+				"domain": ["geosite:cn"],
+				"ip": ["geoip:cn", "geoip:private"]
+			}]
+		},
+		"stats": {}
+	}`
 
-	// 设置日志
-	builder.SetLogLevel("warning")
-
-	// 添加 SOCKS5 入站
-	builder.AddSocksInbound(10808, "127.0.0.1", false, true)
-
-	// 添加 VMess 出站
-	builder.AddVMessOutbound(
-		"example.com",
-		443,
-		"uuid-here",
-		0,
-		"auto",
-	)
-
-	// 添加直连出站
-	builder.AddFreedomOutbound("direct")
-
-	// 添加路由规则 - 中国 IP 直连
-	builder.AddRoutingRule("field", "direct",
-		[]string{"geosite:cn"},
-		[]string{"geoip:cn", "geoip:private"},
-	)
-
-	// 设置 DNS
-	builder.SetDNS(
-		[]string{"8.8.8.8", "1.1.1.1"},
-		map[string]string{},
-	)
-
-	// 启用统计
-	builder.EnableStats()
-
-	// 构建配置
-	configJSON, err := builder.BuildJSON()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println("生成的配置:")
+	fmt.Println("Xray 配置:")
 	fmt.Println(configJSON)
 }
 
@@ -74,13 +77,26 @@ func Example_XrayInstance() {
 	// 创建 Xray 实例
 	instance := NewXrayInstance()
 
-	// 使用配置构建器
-	builder := NewConfigBuilder()
-	builder.SetLogLevel("warning")
-	builder.AddSocksInbound(10808, "127.0.0.1", false, true)
-	builder.AddVMessOutbound("example.com", 443, "uuid", 0, "auto")
-
-	configJSON, _ := builder.BuildJSON()
+	// 使用 JSON 配置
+	configJSON := `{
+		"log": {"loglevel": "warning"},
+		"inbounds": [{
+			"protocol": "socks",
+			"listen": "127.0.0.1",
+			"port": 10808,
+			"settings": {"auth": "noauth", "udp": true}
+		}],
+		"outbounds": [{
+			"protocol": "vmess",
+			"settings": {
+				"vnext": [{
+					"address": "example.com",
+					"port": 443,
+					"users": [{"id": "uuid", "alterId": 0, "security": "auto"}]
+				}]
+			}
+		}]
+	}`
 
 	// 加载配置
 	err := instance.LoadConfig(configJSON)
@@ -212,43 +228,44 @@ func Example_CompleteVPNSetup() {
 	serverConfig, _ := ParseShareURL(shareURL)
 	fmt.Printf("服务器: %s:%d (%s)\n", serverConfig.Address, serverConfig.Port, serverConfig.Protocol)
 
-	// 3. 创建 Xray 配置
+	// 3. 创建 Xray JSON 配置
 	fmt.Println("\n步骤 3: 创建 Xray 配置...")
-	builder := NewConfigBuilder()
-	builder.SetLogLevel("warning")
-
-	// SOCKS5 入站
-	builder.AddSocksInbound(10808, "127.0.0.1", false, true)
-
-	// 根据协议类型添加出站
-	switch serverConfig.Protocol {
-	case "vmess":
-		builder.AddVMessOutbound(
-			serverConfig.Address,
-			serverConfig.Port,
-			serverConfig.ID,
-			serverConfig.AlterID,
-			serverConfig.Security,
-		)
-	case "vless":
-		builder.AddVLESSOutbound(
-			serverConfig.Address,
-			serverConfig.Port,
-			serverConfig.ID,
-			serverConfig.Flow,
-			serverConfig.Encryption,
-		)
-	}
-
-	// 添加直连和路由规则
-	builder.AddFreedomOutbound("direct")
-	builder.AddRoutingRule("field", "direct", []string{"geosite:cn"}, []string{"geoip:cn", "geoip:private"})
-	builder.EnableStats()
+	configJSON := fmt.Sprintf(`{
+		"log": {"loglevel": "warning"},
+		"inbounds": [{
+			"protocol": "socks",
+			"listen": "127.0.0.1",
+			"port": 10808,
+			"settings": {"auth": "noauth", "udp": true}
+		}],
+		"outbounds": [{
+			"protocol": "%s",
+			"settings": {
+				"vnext": [{
+					"address": "%s",
+					"port": %d,
+					"users": [{"id": "%s", "alterId": %d, "security": "%s"}]
+				}]
+			}
+		}, {
+			"tag": "direct",
+			"protocol": "freedom"
+		}],
+		"routing": {
+			"rules": [{
+				"type": "field",
+				"outboundTag": "direct",
+				"domain": ["geosite:cn"],
+				"ip": ["geoip:cn", "geoip:private"]
+			}]
+		},
+		"stats": {}
+	}`, serverConfig.Protocol, serverConfig.Address, serverConfig.Port,
+		serverConfig.ID, serverConfig.AlterID, serverConfig.Security)
 
 	// 4. 启动 Xray
 	fmt.Println("\n步骤 4: 启动 Xray...")
 	xray := NewXrayInstanceWithAssets("/data/xray_assets")
-	configJSON, _ := builder.BuildJSON()
 	xray.LoadConfig(configJSON)
 	xray.Start()
 	fmt.Println("Xray 运行中:", xray.IsRunning())
@@ -275,7 +292,7 @@ func main() {
 	// 取消注释以运行特定示例
 
 	// Example_ParseShareURL()
-	// Example_ConfigBuilder()
+	// Example_DirectJSONConfig()
 	// Example_XrayInstance()
 	// Example_AssetManager()
 	// Example_Tun2Socks()
