@@ -105,20 +105,17 @@ libs/
 
 ## 快速开始
 
-### 1. 创建 VPN 扩展服务
+### 1. 启动 Xray SOCKS5 代理
 
-参考 `examples/vpn_service.ets`，创建 VPN 扩展服务：
+首先启动 XrayHarmony 提供 SOCKS5 入站：
 
 ```typescript
-import VpnExtensionAbility from '@ohos.app.ability.VpnExtensionAbility';
-import vpnExt from '@ohos.net.vpnExtension';
-import { XrayClient, createXrayClient } from '../arkts/src/index';
-import { XrayVPNClient, createXrayVPNClient, VPNConfig } from '../arkts/src/vpn';
+import { createXrayClient } from '../arkts/src/index';
 
 export default class XrayVpnExtension extends VpnExtensionAbility {
   private xrayClient: XrayClient | null = null;
-  private vpnClient: XrayVPNClient | null = null;
   private vpnConnection: vpnExt.VpnConnection | null = null;
+  private tun2socksProcess: any = null;  // tun2socks 进程引用
 
   onCreate(): void {
     // 创建 VPN 连接对象
@@ -126,7 +123,7 @@ export default class XrayVpnExtension extends VpnExtensionAbility {
   }
 
   async startVPN(xrayConfig: any): Promise<void> {
-    // 1. 创建并启动 Xray
+    // 1. 创建并启动 Xray (SOCKS5 入站)
     this.xrayClient = createXrayClient();
     await this.xrayClient.loadConfig(xrayConfig);
     await this.xrayClient.start();
@@ -140,19 +137,18 @@ export default class XrayVpnExtension extends VpnExtensionAbility {
     };
     const tunFd = await this.vpnConnection!.create(tunConfig);
 
-    // 3. 启动 VPN
-    const xrayInstanceId = (this.xrayClient as any).instanceId;
-    this.vpnClient = createXrayVPNClient(xrayInstanceId);
+    // 3. 启动 tun2socks（需要单独实现或集成）
+    // 这里只是示意，实际需要根据项目情况实现 tun2socks 的启动
+    // 方式1: 作为独立进程启动
+    // 方式2: 作为 Native 库集成
+    // 详见 VPN_ARCHITECTURE.md 文档
+    await this.startTun2Socks(tunFd, '127.0.0.1:10808', 1400);
+  }
 
-    const vpnConfig: VPNConfig = {
-      tunFd: tunFd,
-      tunMTU: 1400,
-      socksAddr: '127.0.0.1:10808',
-      dnsServers: ['8.8.8.8', '8.8.4.4'],
-      udp: true
-    };
-
-    await this.vpnClient.start(vpnConfig);
+  async startTun2Socks(tunFd: number, socksAddr: string, mtu: number): Promise<void> {
+    // TODO: 实现 tun2socks 启动逻辑
+    // 可以使用独立的 tun2socks 二进制或库
+    // 参考 examples/VPNControl_Demo 中的实现
   }
 }
 ```
@@ -194,19 +190,42 @@ export default class XrayVpnExtension extends VpnExtensionAbility {
 - `sniffing` 启用以支持流量嗅探和域名解析
 - `udp` 设置为 true 以支持 UDP 流量
 
-### 3. 启动 VPN
+### 3. 集成 tun2socks
 
-在应用中调用 VPN 扩展服务：
+有几种方式集成 tun2socks：
+
+**方式 A：独立二进制进程**
+```bash
+# 编译 tun2socks
+git clone https://github.com/xjasonlyu/tun2socks
+cd tun2socks
+GOOS=linux GOARCH=arm64 go build -o tun2socks
+
+# 在应用中启动
+tun2socks -device fd://<tunFd> -proxy socks5://127.0.0.1:10808 -mtu 1400
+```
+
+**方式 B：使用预编译库**
+
+从 [tun2socks releases](https://github.com/xjasonlyu/tun2socks/releases) 下载预编译库并集成。
+
+### 4. 启动 VPN
+
+完整流程：
 
 ```typescript
-// 获取 VPN 扩展服务
-const vpnExtension = new XrayVpnExtension();
+// 1. 启动 Xray SOCKS5
+const xrayClient = createXrayClient();
+await xrayClient.loadConfig(xrayConfig);
+await xrayClient.start();
 
-// 加载配置
-const xrayConfig = JSON.parse(configFileContent);
+// 2. 创建 TUN 设备（HarmonyOS VPN API）
+const tunFd = await vpnConnection.create(tunConfig);
 
-// 启动 VPN
-await vpnExtension.startVPN(xrayConfig);
+// 3. 启动 tun2socks
+await startTun2Socks(tunFd, '127.0.0.1:10808', 1400);
+
+// VPN 现在已启动并运行
 ```
 
 ## 配置说明
@@ -260,21 +279,20 @@ Xray 配置遵循标准的 Xray-core 配置格式，必须包含：
 }
 ```
 
-### VPN 配置
+### tun2socks 配置参数
 
-```typescript
-interface VPNConfig {
-  tunFd: number;           // TUN 设备文件描述符（必需）
-  tunMTU?: number;         // MTU 值，默认 1400
-  socksAddr: string;       // Xray SOCKS5 地址，默认 127.0.0.1:10808
-  dnsServers?: string[];   // DNS 服务器，默认 ['8.8.8.8', '8.8.4.4']
-  fakeDNS?: boolean;       // 启用 FakeDNS，默认 false
-  udp?: boolean;           // 启用 UDP，默认 true
-  tcpConcurrent?: boolean; // 启用 TCP 并发，默认 false
-}
+tun2socks 的主要配置参数：
+
+```bash
+tun2socks \
+  -device fd://<tunFd> \      # TUN 设备文件描述符
+  -proxy socks5://127.0.0.1:10808 \  # SOCKS5 代理地址
+  -mtu 1400 \                 # MTU 值
+  -loglevel info \            # 日志级别
+  -stats :8080                # 可选：统计信息端口
 ```
 
-### TUN 设备配置
+### TUN 设备配置（HarmonyOS VPN API）
 
 ```typescript
 interface VpnConfig {
@@ -287,83 +305,49 @@ interface VpnConfig {
 }
 ```
 
-**默认配置**：
+**推荐配置**：
 - IP 地址: 10.0.0.2/24
 - 网关: 10.0.0.1
 - MTU: 1400
 - 默认路由: 0.0.0.0/0（全局代理）
+- DNS: 8.8.8.8, 8.8.4.4
 
 ## API 参考
 
-### XrayVPNClient
+### XrayClient (基础代理功能)
 
-#### 构造函数
-
-```typescript
-constructor(xrayInstanceId: number)
-```
-
-创建 VPN 客户端实例。
-
-- `xrayInstanceId`: Xray 实例 ID
-
-#### start()
+XrayHarmony 提供的核心 API，用于管理 Xray 代理：
 
 ```typescript
-async start(config: VPNConfig): Promise<void>
+import { createXrayClient, XrayClient } from '@shuffleman/xray-harmony';
+
+const client = createXrayClient();
+
+// 加载配置
+await client.loadConfig(config);
+
+// 启动代理
+await client.start();
+
+// 检查状态
+const isRunning = client.isRunning();
+
+// 停止代理
+await client.stop();
+
+// 释放资源
+client.destroy();
 ```
 
-启动 VPN 连接。
+详细的 API 说明请参考 [API 文档](API.md)。
 
-**参数**:
-- `config`: VPN 配置对象
+### tun2socks 集成
 
-**抛出**:
-- 如果启动失败，抛出错误
+tun2socks 需要单独集成，XrayHarmony 不提供封装的 API。集成方式：
 
-#### stop()
-
-```typescript
-async stop(): Promise<void>
-```
-
-停止 VPN 连接。
-
-#### isRunning()
-
-```typescript
-isRunning(): boolean
-```
-
-检查 VPN 是否正在运行。
-
-**返回**: `true` 如果正在运行，否则 `false`
-
-#### getStats()
-
-```typescript
-async getStats(): Promise<VPNStats>
-```
-
-获取 VPN 统计信息。
-
-**返回**: VPNStats 对象
-
-```typescript
-interface VPNStats {
-  running: boolean;
-  socksAddr: string;
-  mtu: number;
-}
-```
-
-#### destroy()
-
-```typescript
-destroy(): void
-```
-
-销毁 VPN 客户端，释放资源。
+1. **进程方式**：使用 HarmonyOS 进程 API 启动 tun2socks 二进制
+2. **库方式**：通过 Native 层集成 tun2socks 库
+3. **参考实现**：查看 `examples/VPNControl_Demo` 示例
 
 ## 常见问题
 
