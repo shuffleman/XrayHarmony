@@ -235,8 +235,422 @@ func XrayTestConfig(id C.longlong, configJSON *C.char) C.int {
 // 版本信息
 //export XrayGetVersion
 func XrayGetVersion() *C.char {
-	version := "XrayHarmony v1.0.0"
+	version := "XrayHarmony v2.0.0"
 	return C.CString(version)
+}
+
+// ===============================
+// 协议工具函数导出
+// ===============================
+
+//export XrayParseShareURL
+func XrayParseShareURL(shareURL *C.char) *C.char {
+	url := C.GoString(shareURL)
+
+	config, err := ParseShareURL(url)
+	if err != nil {
+		setLastError(err)
+		return nil
+	}
+
+	data, err := json.Marshal(config)
+	if err != nil {
+		setLastError(err)
+		return nil
+	}
+
+	setLastError(nil)
+	return C.CString(string(data))
+}
+
+//export XrayGenerateShareURL
+func XrayGenerateShareURL(configJSON *C.char) *C.char {
+	configStr := C.GoString(configJSON)
+
+	var config ServerConfig
+	if err := json.Unmarshal([]byte(configStr), &config); err != nil {
+		setLastError(err)
+		return nil
+	}
+
+	url, err := GenerateShareURL(&config)
+	if err != nil {
+		setLastError(err)
+		return nil
+	}
+
+	setLastError(nil)
+	return C.CString(url)
+}
+
+// ===============================
+// Tun2Socks 函数导出
+// ===============================
+
+var (
+	tun2socksInstances   = make(map[int64]*Tun2SocksInstance)
+	tun2socksInstancesMu sync.RWMutex
+	nextTun2SocksID      int64 = 1
+)
+
+//export Tun2SocksNew
+func Tun2SocksNew(configJSON *C.char) C.longlong {
+	configStr := C.GoString(configJSON)
+
+	var config Tun2SocksConfig
+	if err := json.Unmarshal([]byte(configStr), &config); err != nil {
+		setLastError(err)
+		return -1
+	}
+
+	instance := NewTun2SocksInstance(&config)
+
+	tun2socksInstancesMu.Lock()
+	defer tun2socksInstancesMu.Unlock()
+
+	id := nextTun2SocksID
+	nextTun2SocksID++
+	tun2socksInstances[id] = instance
+
+	setLastError(nil)
+	return C.longlong(id)
+}
+
+//export Tun2SocksStart
+func Tun2SocksStart(id C.longlong) C.int {
+	tun2socksInstancesMu.RLock()
+	instance, exists := tun2socksInstances[int64(id)]
+	tun2socksInstancesMu.RUnlock()
+
+	if !exists {
+		setLastError(fmt.Errorf("tun2socks instance not found"))
+		return -1
+	}
+
+	if err := instance.Start(); err != nil {
+		setLastError(err)
+		return -1
+	}
+
+	setLastError(nil)
+	return 0
+}
+
+//export Tun2SocksStop
+func Tun2SocksStop(id C.longlong) C.int {
+	tun2socksInstancesMu.RLock()
+	instance, exists := tun2socksInstances[int64(id)]
+	tun2socksInstancesMu.RUnlock()
+
+	if !exists {
+		setLastError(fmt.Errorf("tun2socks instance not found"))
+		return -1
+	}
+
+	if err := instance.Stop(); err != nil {
+		setLastError(err)
+		return -1
+	}
+
+	setLastError(nil)
+	return 0
+}
+
+//export Tun2SocksDelete
+func Tun2SocksDelete(id C.longlong) C.int {
+	tun2socksInstancesMu.Lock()
+	defer tun2socksInstancesMu.Unlock()
+
+	instanceID := int64(id)
+	instance, exists := tun2socksInstances[instanceID]
+	if !exists {
+		setLastError(fmt.Errorf("tun2socks instance not found"))
+		return -1
+	}
+
+	if instance.IsRunning() {
+		if err := instance.Stop(); err != nil {
+			setLastError(err)
+			return -1
+		}
+	}
+
+	delete(tun2socksInstances, instanceID)
+	setLastError(nil)
+	return 0
+}
+
+//export Tun2SocksIsRunning
+func Tun2SocksIsRunning(id C.longlong) C.int {
+	tun2socksInstancesMu.RLock()
+	instance, exists := tun2socksInstances[int64(id)]
+	tun2socksInstancesMu.RUnlock()
+
+	if !exists {
+		setLastError(fmt.Errorf("tun2socks instance not found"))
+		return -1
+	}
+
+	if instance.IsRunning() {
+		setLastError(nil)
+		return 1
+	}
+
+	setLastError(nil)
+	return 0
+}
+
+//export Tun2SocksGetStats
+func Tun2SocksGetStats(id C.longlong) *C.char {
+	tun2socksInstancesMu.RLock()
+	instance, exists := tun2socksInstances[int64(id)]
+	tun2socksInstancesMu.RUnlock()
+
+	if !exists {
+		setLastError(fmt.Errorf("tun2socks instance not found"))
+		return nil
+	}
+
+	bytesUp, bytesDown := instance.GetStats()
+
+	stats := map[string]interface{}{
+		"bytes_up":   bytesUp,
+		"bytes_down": bytesDown,
+	}
+
+	data, err := json.Marshal(stats)
+	if err != nil {
+		setLastError(err)
+		return nil
+	}
+
+	setLastError(nil)
+	return C.CString(string(data))
+}
+
+// ===============================
+// 资产管理函数导出
+// ===============================
+
+var (
+	assetManagers   = make(map[int64]*AssetManager)
+	assetManagersMu sync.RWMutex
+	nextAssetMgrID  int64 = 1
+)
+
+//export AssetManagerNew
+func AssetManagerNew(baseDir *C.char) C.longlong {
+	dir := C.GoString(baseDir)
+
+	manager := NewAssetManager(dir)
+
+	assetManagersMu.Lock()
+	defer assetManagersMu.Unlock()
+
+	id := nextAssetMgrID
+	nextAssetMgrID++
+	assetManagers[id] = manager
+
+	setLastError(nil)
+	return C.longlong(id)
+}
+
+//export AssetManagerDelete
+func AssetManagerDelete(id C.longlong) C.int {
+	assetManagersMu.Lock()
+	defer assetManagersMu.Unlock()
+
+	instanceID := int64(id)
+	if _, exists := assetManagers[instanceID]; !exists {
+		setLastError(fmt.Errorf("asset manager not found"))
+		return -1
+	}
+
+	delete(assetManagers, instanceID)
+	setLastError(nil)
+	return 0
+}
+
+//export AssetManagerGetInfo
+func AssetManagerGetInfo(id C.longlong, assetType *C.char) *C.char {
+	assetManagersMu.RLock()
+	manager, exists := assetManagers[int64(id)]
+	assetManagersMu.RUnlock()
+
+	if !exists {
+		setLastError(fmt.Errorf("asset manager not found"))
+		return nil
+	}
+
+	aType := AssetType(C.GoString(assetType))
+	info, err := manager.GetAssetInfo(aType)
+	if err != nil {
+		setLastError(err)
+		return nil
+	}
+
+	data, err := json.Marshal(info)
+	if err != nil {
+		setLastError(err)
+		return nil
+	}
+
+	setLastError(nil)
+	return C.CString(string(data))
+}
+
+//export AssetManagerDownload
+func AssetManagerDownload(id C.longlong, assetType *C.char, url *C.char) C.int {
+	assetManagersMu.RLock()
+	manager, exists := assetManagers[int64(id)]
+	assetManagersMu.RUnlock()
+
+	if !exists {
+		setLastError(fmt.Errorf("asset manager not found"))
+		return -1
+	}
+
+	aType := AssetType(C.GoString(assetType))
+	downloadURL := C.GoString(url)
+
+	if err := manager.DownloadAsset(aType, downloadURL, nil); err != nil {
+		setLastError(err)
+		return -1
+	}
+
+	setLastError(nil)
+	return 0
+}
+
+//export AssetManagerCheckUpdate
+func AssetManagerCheckUpdate(id C.longlong, assetType *C.char, url *C.char) C.int {
+	assetManagersMu.RLock()
+	manager, exists := assetManagers[int64(id)]
+	assetManagersMu.RUnlock()
+
+	if !exists {
+		setLastError(fmt.Errorf("asset manager not found"))
+		return -1
+	}
+
+	aType := AssetType(C.GoString(assetType))
+	checkURL := C.GoString(url)
+
+	needsUpdate, err := manager.CheckAssetUpdate(aType, checkURL)
+	if err != nil {
+		setLastError(err)
+		return -1
+	}
+
+	setLastError(nil)
+	if needsUpdate {
+		return 1
+	}
+	return 0
+}
+
+//export AssetManagerVerify
+func AssetManagerVerify(id C.longlong, assetType *C.char) C.int {
+	assetManagersMu.RLock()
+	manager, exists := assetManagers[int64(id)]
+	assetManagersMu.RUnlock()
+
+	if !exists {
+		setLastError(fmt.Errorf("asset manager not found"))
+		return -1
+	}
+
+	aType := AssetType(C.GoString(assetType))
+
+	valid, err := manager.VerifyAsset(aType)
+	if err != nil {
+		setLastError(err)
+		return -1
+	}
+
+	setLastError(nil)
+	if valid {
+		return 1
+	}
+	return 0
+}
+
+// ===============================
+// 配置构建器函数导出
+// ===============================
+
+var (
+	configBuilders   = make(map[int64]*ConfigBuilder)
+	configBuildersMu sync.RWMutex
+	nextBuilderID    int64 = 1
+)
+
+//export ConfigBuilderNew
+func ConfigBuilderNew() C.longlong {
+	builder := NewConfigBuilder()
+
+	configBuildersMu.Lock()
+	defer configBuildersMu.Unlock()
+
+	id := nextBuilderID
+	nextBuilderID++
+	configBuilders[id] = builder
+
+	setLastError(nil)
+	return C.longlong(id)
+}
+
+//export ConfigBuilderDelete
+func ConfigBuilderDelete(id C.longlong) C.int {
+	configBuildersMu.Lock()
+	defer configBuildersMu.Unlock()
+
+	instanceID := int64(id)
+	if _, exists := configBuilders[instanceID]; !exists {
+		setLastError(fmt.Errorf("config builder not found"))
+		return -1
+	}
+
+	delete(configBuilders, instanceID)
+	setLastError(nil)
+	return 0
+}
+
+//export ConfigBuilderSetLogLevel
+func ConfigBuilderSetLogLevel(id C.longlong, level *C.char) C.int {
+	configBuildersMu.RLock()
+	builder, exists := configBuilders[int64(id)]
+	configBuildersMu.RUnlock()
+
+	if !exists {
+		setLastError(fmt.Errorf("config builder not found"))
+		return -1
+	}
+
+	builder.SetLogLevel(C.GoString(level))
+	setLastError(nil)
+	return 0
+}
+
+//export ConfigBuilderBuild
+func ConfigBuilderBuild(id C.longlong) *C.char {
+	configBuildersMu.RLock()
+	builder, exists := configBuilders[int64(id)]
+	configBuildersMu.RUnlock()
+
+	if !exists {
+		setLastError(fmt.Errorf("config builder not found"))
+		return nil
+	}
+
+	jsonStr, err := builder.BuildJSON()
+	if err != nil {
+		setLastError(err)
+		return nil
+	}
+
+	setLastError(nil)
+	return C.CString(jsonStr)
 }
 
 func main() {

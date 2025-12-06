@@ -186,25 +186,94 @@ client.destroy();
 
 ## 📚 使用示例
 
+### 快速开始 - 解析分享链接
+
+```typescript
+import { createXrayClient } from '@shuffleman/xray-harmony';
+
+const client = createXrayClient();
+
+// 解析 VMess/VLESS/Trojan/SS 分享链接
+const shareURL = "vmess://eyJ2IjoiMiIsInBzIjoi...";
+const serverConfig = await client.parseShareURL(shareURL);
+
+console.log('服务器:', serverConfig.address);
+console.log('端口:', serverConfig.port);
+console.log('协议:', serverConfig.protocol);
+```
+
+### 使用配置构建器
+
+```typescript
+import { ConfigBuilder } from '@shuffleman/xray-harmony';
+
+const builder = new ConfigBuilder();
+
+// 设置日志级别
+builder.setLogLevel('warning');
+
+// 添加 SOCKS5 入站
+builder.addSocksInbound(10808, '127.0.0.1', false, true);
+
+// 添加 VMess 出站
+builder.addVMessOutbound(
+  'server.example.com',
+  443,
+  'your-uuid-here',
+  0,
+  'auto'
+);
+
+// 添加路由规则 - 中国 IP 直连
+builder.addRoutingRule('field', 'direct', ['geosite:cn'], ['geoip:cn']);
+
+// 启用统计
+builder.enableStats();
+
+// 构建并使用配置
+const config = builder.build();
+await client.loadConfig(config);
+await client.start();
+```
+
+### 资产管理
+
+```typescript
+import { AssetManager } from '@shuffleman/xray-harmony';
+
+const assetMgr = new AssetManager('/data/storage/el2/base/assets');
+
+// 下载 geoip 和 geosite
+await assetMgr.download('geoip', '', (progress) => {
+  console.log(`下载进度: ${progress.percentage}%`);
+});
+
+await assetMgr.download('geosite', '');
+
+// 在配置中使用
+builder.addRoutingRule('field', 'direct', ['geosite:cn'], ['geoip:cn', 'geoip:private']);
+```
+
 ### VPN 模式
 
-XrayHarmony 配合 tun2socks 可以实现系统级 VPN 功能。
+XrayHarmony 内置 tun2socks 封装,可以实现系统级 VPN 功能。
 
 **架构说明**：
 ```
 HarmonyOS VPN API → TUN 设备
          ↓
-    tun2socks (独立组件) → SOCKS5 连接
+    Tun2Socks (内置) → SOCKS5 连接
          ↓
-    XrayHarmony (Xray SOCKS5) → 代理服务器
+    Xray (SOCKS5 入站) → 代理服务器
 ```
 
-**基本步骤**：
+**完整实现**：
 
-1. **启动 Xray SOCKS5 代理**
 ```typescript
-import { createXrayClient } from '@shuffleman/xray-harmony';
+import { createXrayClient, Tun2Socks } from '@shuffleman/xray-harmony';
+import vpnExtension from '@ohos.net.vpnExtension';
 
+// 1. 启动 Xray SOCKS5 代理
 const client = createXrayClient();
 await client.loadConfig({
   inbound: {
@@ -214,20 +283,44 @@ await client.loadConfig({
     settings: { auth: 'noauth', udp: true }
   },
   outbound: {
-    protocol: 'vmess',  // 或其他协议
+    protocol: 'vmess',
     settings: { /* 你的服务器配置 */ }
   }
 });
 await client.start();
+
+// 2. 创建 VPN 连接并获取 TUN FD
+const vpnConnection = vpnExtension.createVpnConnection(getContext());
+await vpnConnection.setUp({
+  addresses: [{ address: { address: '10.0.0.2' }, prefixLength: 24 }],
+  routes: [{ interface: 'tun0', destination: { address: '0.0.0.0' }, prefixLength: 0 }],
+  dnsServers: ['8.8.8.8'],
+  mtu: 1500
+});
+const tunFd = vpnConnection.getFileDescriptor();
+
+// 3. 启动 Tun2Socks
+const tun2socks = new Tun2Socks({
+  tunFd: tunFd,
+  socksAddr: '127.0.0.1:10808',
+  mtu: 1500,
+  dnsAddr: '8.8.8.8:53'
+});
+await tun2socks.start();
+
+console.log('VPN 已启动!');
+
+// 4. 获取统计信息
+const stats = await client.getStats();
+const tunStats = await tun2socks.getStats();
+console.log('Xray 统计:', stats);
+console.log('隧道统计:', tunStats);
 ```
 
-2. **使用 HarmonyOS VPN API 创建 TUN 设备**
-
-3. **启动 tun2socks 连接 TUN 和 SOCKS5**
-
 详细的 VPN 实现指南请参考：
+- [完整 API 文档](docs/XRAY_WRAPPER_API.md) - 所有功能的详细说明
+- [集成指南](docs/INTEGRATION_GUIDE_CN.md) - 完整的集成步骤
 - [VPN 架构文档](docs/VPN_ARCHITECTURE.md) - 架构设计和实现方案
-- [VPN 使用指南](docs/VPN.md) - 配置和使用说明
 - [VPNControl_Demo](examples/VPNControl_Demo/) - 完整示例项目
 
 ### 基础使用
@@ -323,14 +416,50 @@ export class XrayService {
 
 ## 📖 文档
 
-- [API 文档](docs/API.md) - 完整的 API 参考
-- [VPN 使用指南](docs/VPN.md) - TUN + Xray VPN 功能详细说明
+### 核心文档
+- [完整 API 文档](docs/XRAY_WRAPPER_API.md) - **新!** 所有功能的详细 API 说明
+- [集成指南](docs/INTEGRATION_GUIDE_CN.md) - **新!** 完整的集成步骤和示例
+- [API 参考](docs/API.md) - 基础 API 参考
+- [构建文档](docs/BUILD.md) - 构建和编译指南
+
+### VPN 相关
 - [VPN 架构文档](docs/VPN_ARCHITECTURE.md) - VPN 技术架构说明
-- [构建文档](docs/BUILD.md) - 构建和集成指南
-- [集成指南](docs/INTEGRATION.md) - HarmonyOS 项目集成说明
+- [VPN 使用指南](docs/VPN.md) - TUN + Xray VPN 功能详细说明
+- [VPN 示例项目](examples/VPNControl_Demo/) - 完整的鸿蒙 VPN 示例应用
+
+### 其他
 - [升级记录](UPGRADE_PLAN.md) - Xray-core 升级历史和当前版本信息
 - [示例代码](examples/) - 各种使用场景示例
-- [VPN 示例项目](examples/VPNControl_Demo/) - 完整的鸿蒙 VPN 示例应用
+
+### 新功能特性
+
+#### 🔧 协议工具
+支持解析和生成主流代理协议的分享链接:
+- VMess (v2rayN 格式)
+- VLESS (标准格式)
+- Trojan (标准格式)
+- Shadowsocks (标准格式)
+
+#### 🌐 Tun2Socks
+内置 tun2socks 封装,无需外部依赖:
+- 处理 TUN 设备流量
+- 转发到 SOCKS5 代理
+- 实时流量统计
+- 支持 UDP
+
+#### 📦 资产管理
+自动管理路由规则数据:
+- geoip.dat (IP 数据库)
+- geosite.dat (域名数据库)
+- 自动检查更新
+- 下载进度跟踪
+
+#### ⚙️ 配置构建器
+流畅的配置 API:
+- 链式调用
+- 类型安全
+- 支持所有协议
+- 路由规则简化
 
 ## 🔧 开发
 
@@ -391,10 +520,47 @@ make test
 - **模块化设计**: Go → C++ → ArkTS 清晰的分层架构
 - **完整代理支持**: 支持所有 Xray 协议（SOCKS5、VMess、VLESS、Trojan 等）
 
+### 🎯 v2.0.0 新增功能
+
+#### 1. **协议工具** (参考 v2rayNG 实现)
+- ✅ VMess 链接解析和生成 (`vmess://`)
+- ✅ VLESS 链接解析和生成 (`vless://`)
+- ✅ Trojan 链接解析和生成 (`trojan://`)
+- ✅ Shadowsocks 链接解析和生成 (`ss://`)
+- ✅ 自动识别协议类型
+
+#### 2. **Tun2Socks 封装**
+- ✅ 完整的 tun2socks 框架
+- ✅ TUN 设备流量处理
+- ✅ SOCKS5 代理转发
+- ✅ 流量统计功能
+- ✅ 支持 VPN 模式
+
+#### 3. **资产管理器**
+- ✅ geoip.dat 管理和下载
+- ✅ geosite.dat 管理和下载
+- ✅ 自动检查更新
+- ✅ 文件验证
+- ✅ 下载进度回调
+
+#### 4. **配置构建器**
+- ✅ 流畅的配置 API
+- ✅ 支持所有入站协议 (SOCKS5, HTTP)
+- ✅ 支持所有出站协议 (VMess, VLESS, Trojan, SS, Freedom, Blackhole)
+- ✅ 路由规则配置
+- ✅ DNS 配置
+- ✅ 统计和策略支持
+
+#### 5. **增强的统计功能**
+- ✅ 实时流量统计
+- ✅ 运行时长记录
+- ✅ 上行/下行字节数
+- ✅ 分组件统计 (Xray + Tun2Socks)
+
 ### VPN 功能说明
 - **核心封装**: XrayHarmony 封装 Xray-core 提供 SOCKS5 代理功能
-- **VPN 实现**: 需配合外部 tun2socks 实现完整 VPN 功能
-- **分离式架构**: Xray-core 不支持 TUN 入站，VPN 需要独立的 TUN 处理组件
+- **Tun2Socks**: 内置 tun2socks 封装,处理 TUN 设备流量
+- **完整方案**: HarmonyOS VPN API → TUN → Tun2Socks → Xray → 远程服务器
 - **参考示例**: 查看 `examples/VPNControl_Demo` 了解 VPN 集成方案
 
 ## 🙏 致谢
